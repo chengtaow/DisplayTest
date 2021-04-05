@@ -64,7 +64,7 @@ class OpenGLESView extends GLSurfaceView {
 
         // Load point cloud
         mPcReader = new PointCloudReader(context);
-        mPcReader.GetPointCloudFromFile("PointCloud_RGB.txt");
+        mPcReader.GetPointCloudFromFile("PointCloud_RGB_C.txt");
 
         // set the mRenderer member
         mRenderer = new OpenGLESRenderer(mPcReader);
@@ -88,6 +88,9 @@ class OpenGLESView extends GLSurfaceView {
 
                 float dx = x - mPreviousX;
                 float dy = y - mPreviousY;
+
+                mRenderer.mAnglePitch -= dx * TOUCH_SCALE_FACTOR;
+                mRenderer.mAngleYaw -= dy * TOUCH_SCALE_FACTOR;
 
                 // reverse direction of rotation above the mid-line
                 if (y > getHeight() / 2) {

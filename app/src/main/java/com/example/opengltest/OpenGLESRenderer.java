@@ -7,6 +7,7 @@ import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.os.SystemClock;
+import android.util.Log;
 
 public class OpenGLESRenderer implements GLSurfaceView.Renderer {
 
@@ -22,6 +23,10 @@ public class OpenGLESRenderer implements GLSurfaceView.Renderer {
     private float[] mMMatrix = new float[16];
     private float[] mVMatrix = new float[16];
     private float[] mProjMatrix = new float[16];
+
+    private float[] viewCenter = new float[] {0, 0, 4f};
+    private float distance = 5f;
+    private float[] mTemp = new float[16];
 
     public float mAnglePitch;
     public float mAngleYaw;
@@ -66,21 +71,21 @@ public class OpenGLESRenderer implements GLSurfaceView.Renderer {
                 (4 * 4), triangleCB);
         GLES20.glEnableVertexAttribArray(maColorHandle);
 
-
-        // Create a rotation for the triangle
-        //long time = SystemClock.uptimeMillis() % 4000L;
-        //float angle = 0.090f * ((int) time);
-        //Matrix.setRotateM(mMMatrix, 0, angle, 0, 0, 1.0f);
-
         // Use the mAngle member as the rotation value
-        Matrix.setRotateM(mMMatrix, 0, mAngleRoll, 0, 0, 1.0f);
+        Matrix.setRotateM(mTemp, 0, mAngleRoll, 0, 0, 1.0f);
+        Matrix.rotateM(mTemp, 0, mTemp, 0, mAnglePitch, 1.0f, 0, 0);
+        Matrix.rotateM(mTemp, 0, mTemp, 0, mAngleYaw, 0, 1.0f, 0);
+
+        Matrix.setLookAtM(mVMatrix, 0, viewCenter[0] - distance * mTemp[8],
+                viewCenter[1] - distance * mTemp[9], viewCenter[2] - distance * mTemp[10],
+                viewCenter[0], viewCenter[1], viewCenter[2], mTemp[0], mTemp[1], mTemp[2]);
 
         Matrix.multiplyMM(mMVPMatrix, 0, mVMatrix, 0, mMMatrix, 0);
         Matrix.multiplyMM(mMVPMatrix, 0, mProjMatrix, 0, mMVPMatrix, 0);
         GLES20.glUniformMatrix4fv(muMVPMatrixHandle, 1, false, mMVPMatrix, 0);
 
         // Draw the triangle
-        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, 4);
+        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, pointCloud.pointCloudSize);
     }
 
     public void onSurfaceChanged(GL10 unused, int width, int height) {
@@ -90,32 +95,12 @@ public class OpenGLESRenderer implements GLSurfaceView.Renderer {
 
         // this projection matrix is applied to object coodinates
         // in the onDrawFrame() method
-        //Matrix.frustumM(mProjMatrix, 0, -ratio, ratio, -1, 1, 3, 7);
-        Matrix.perspectiveM(mProjMatrix, 0, 60f, ratio, 0, 2);
+        Matrix.setRotateM(mMMatrix, 0, 0, 0, 0, 1.0f);
+        Matrix.perspectiveM(mProjMatrix, 0, 90f, ratio, 0, 9);
         muMVPMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix");
-        Matrix.setLookAtM(mVMatrix, 0, 0, 0, -1,
-                0f, 0f, 0f, 0f, 1.0f, 0.0f);
     }
 
-    private void initShapes(){
-
-        /*
-        float triangleCoords[] = {
-                // X, Y, Z
-                -0.25f, -1f, 0, // Right bottom
-                0.25f, -0.25f, 0, // Left bottom
-                -0.25f,  0.25f, 0, // Right top
-                0.25f, 0.25f, 0 // Left top
-        };
-
-        float triangleColors[] = {
-                // R, G, B
-                1.0f, 0, 0, 0, // Red
-                0, 1.0f, 0, 0,// Green
-                0, 0, 1.0f, 0,// Blue
-                1.0f, 1.0f, 0, 0 // Yellow
-        };
-        */
+    private void initShapes() {
 
         // initialize vertex Buffer for triangle
         ByteBuffer vbb = ByteBuffer.allocateDirect(
@@ -144,7 +129,7 @@ public class OpenGLESRenderer implements GLSurfaceView.Renderer {
             "void main(){               \n" +
             // the matrix must be included as a modifier of gl_Position
             " gl_Position = uMVPMatrix * vPosition; \n" +
-            " gl_PointSize = 15.0;      \n" +
+            " gl_PointSize = 10.0;      \n" +
             " vColor = aColor;          \n" +
             "}                          \n";
 
@@ -161,10 +146,21 @@ public class OpenGLESRenderer implements GLSurfaceView.Renderer {
         // or a fragment shader type (GLES20.GL_FRAGMENT_SHADER)
         int shader = GLES20.glCreateShader(type);
 
-        // add the source code to the shader and compile it
-        GLES20.glShaderSource(shader, shaderCode);
-        GLES20.glCompileShader(shader);
-
+        if (shader != 0) {
+            // add the source code to the shader and compile it
+            GLES20.glShaderSource(shader, shaderCode);
+            GLES20.glCompileShader(shader);
+            int[] compiled = new int[1];
+            GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS,
+                    compiled, 0);
+            if (compiled[0] == 0) {
+                // compile failure
+                Log.e("ES20_ERROR", "Could not compile shader " + type + ":");
+                Log.e("ES20_ERROR", GLES20.glGetShaderInfoLog(shader));
+                GLES20.glDeleteShader(shader);
+                shader = 0;
+            }
+        }
         return shader;
     }
 }
